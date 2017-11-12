@@ -39,6 +39,11 @@ function generateRandomWalkVector(min, max)
             mode = math.random(4)
             modeAge = 100
         end
+
+        if (math.random(1000) == 1) then
+            currentHeight = currentHeight + math.random(-100,100)
+        end
+
     end
     currentHeight = 0
     for i=0, min,-1 do
