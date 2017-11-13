@@ -4,7 +4,7 @@ local MIN_Z = -30000
 local MAX_Z = 30000
 
 
-function generateRandomWalkVector(min, max)
+function generateRandomWalkVector(min, max, generateBreaks)
     local currentHeight = 0
     local val = {}
 
@@ -40,7 +40,7 @@ function generateRandomWalkVector(min, max)
             modeAge = 100
         end
 
-        if (math.random(1000) == 1) then
+        if (generateBreaks and math.random(1000) == 1) then
             currentHeight = currentHeight + math.random(-100,100)
         end
 
@@ -55,10 +55,13 @@ function generateRandomWalkVector(min, max)
 end
 
 minetest.register_on_mapgen_init(function(mapgen_params)
-    xWalk = generateRandomWalkVector(MIN_X, MAX_X);
-    zWalk = generateRandomWalkVector(MIN_Z, MAX_Z);
-    xzWalk1 = generateRandomWalkVector(MIN_X, MAX_X);
-    xzWalk2 = generateRandomWalkVector(MIN_Z, MAX_Z);
+    xWalk = generateRandomWalkVector(MIN_X, MAX_X, false);
+    zWalk = generateRandomWalkVector(MIN_X, MAX_X, false);
+    xzWalk1 = generateRandomWalkVector(MIN_X, MAX_X, false);
+    xzWalk2 = generateRandomWalkVector(MIN_Z, MAX_Z, false);
+    xzWalk3 = generateRandomWalkVector(MIN_Z, MAX_Z, true);
+    xzWalk4 = generateRandomWalkVector(MIN_Z, MAX_Z, true);
+    xzWalk5 = generateRandomWalkVector(MIN_Z, MAX_Z, true);
 end)
 
 
@@ -78,11 +81,22 @@ minetest.register_on_generated(function(minp, maxp, seed)
     for z = minp.z, maxp.z do
     for y = minp.y, maxp.y do
     for x = minp.x, maxp.x do
-        if xWalk[x] then
+        if xzWalk1[x] then
             index2d = (z - minp.z) * csize.x + (x - minp.x) + 1   
             local ivm = a:index(x, y, z)
 
-            if y < (xWalk[x] + zWalk[z] + xzWalk1[x + z] + xzWalk2[x - z]) / 3 then
+            if y < (xWalk[x] + zWalk[z]
+                    + xzWalk1[x + z] + xzWalk2[z - x]
+                    + xzWalk3[math.floor((x * z * 0.1 * xWalk[math.floor(x / 100)]
+                        + x * x * 0.01 * xWalk[math.floor(z / 100)]
+                        + z * z * 0.001 * xWalk[math.floor(x / 100)] + z * 2 + x * 3) / 100)]
+                    + xzWalk4[math.floor((x * z * 0.001 * zWalk[math.floor(z / 100)]
+                        + x * x * 0.1 * zWalk[math.floor(x / 100)]
+                        + z * z * 0.01 * xWalk[math.floor(z / 100)] - z * 2 - x * 3) / 100)]
+                    + xzWalk5[math.floor((x * z * 0.0001 * xWalk[math.floor(z / 100)]
+                        + x * x * 0.01 * xWalk[math.floor(x / 100)]
+                        + z * z * 0.1 * zWalk[math.floor(x /100)] - z - x) / 100)]
+                    ) / 4 then
                 data[ivm] = c_stone
                 write = true
             elseif y < 1 then
