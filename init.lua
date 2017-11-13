@@ -55,6 +55,8 @@ function generateRandomWalkVector(min, max, generateBreaks)
 end
 
 minetest.register_on_mapgen_init(function(mapgen_params)
+    math.randomseed(mapgen_params.seed) -- produce the same world for the same seed
+
     xWalk = generateRandomWalkVector(MIN_X, MAX_X, false);
     zWalk = generateRandomWalkVector(MIN_X, MAX_X, false);
     xzWalk1 = generateRandomWalkVector(MIN_X, MAX_X, false);
