@@ -3,67 +3,73 @@ local MAX_X = 30000
 local MIN_Z = -30000
 local MAX_Z = 30000
 
+local NUMBER_OF_MAXIMUMS = 100
 
-function generateRandomWalkVector(min, max, generateBreaks)
-    local currentHeight = 0
-    local val = {}
+maximums = {}
 
-    local mode = math.random(4); -- mode of random walking, shifts probability distribution
-    local modeAge = 10; -- mode age, when goes to zero, mode is reset
+function generate_random_coordinate()
+    return math.random() * (MAX_X - MIN_X) - (MAX_X - MIN_X) * 0.5
+end
 
-    for i=0, max do
-        val[i] = currentHeight
-        if (mode == 1) then
-            currentHeight = currentHeight + math.random(-1,1)
-        elseif (mode == 2) then
-            if (math.random(3) == 1) then
-                currentHeight = currentHeight + math.random(-1,1)
-            else
-                currentHeight = currentHeight
-            end
-        elseif (mode == 3) then
-            if (math.random(3) == 1) then
-                currentHeight = currentHeight + math.random(-1,1)
-            else
-                currentHeight = currentHeight + 1
-            end
-        elseif (mode == 4) then
-            if (math.random(3) == 1) then
-                currentHeight = currentHeight + math.random(-1,1)
-            else
-                currentHeight = currentHeight - 1
-            end
-        end
-        modeAge = modeAge - 1;
-        if (modeAge == 0) then
-            mode = math.random(4)
-            modeAge = 100
-        end
+function generate_random_position()
+    return {
+            x = generate_random_coordinate() % 1000,
+            y = generate_random_coordinate() % 50,
+            z = generate_random_coordinate() % 1000
+        }
+end
 
-        if (generateBreaks and math.random(1000) == 1) then
-            currentHeight = currentHeight + math.random(-100,100)
-        end
+function generate_maximums()
+    -- generates a list of pos, which are maximums
 
-    end
-    currentHeight = 0
-    for i=0, min,-1 do
-        val[i] = currentHeight
-        currentHeight = currentHeight + math.random(-1,1)
+    local rsf = {}
+
+    for i = 0, NUMBER_OF_MAXIMUMS do
+        table.insert(rsf, generate_random_position())
     end
 
-    return val
+    return rsf
+end
+
+cache = {}
+function is_inside_the_cone(pos, cone_max)
+    if (pos.y < cone_max.y - math.abs(cone_max.x - pos.x)
+           and pos.y < cone_max.y - math.abs(cone_max.z - pos.z)) then
+    
+        if (not cache[pos.x]) then
+            cache[pos.x] = {}
+        end
+
+        if (not cache[pos.x][pos.z]) then
+            cache[pos.x][pos.z] = math.min(cone_max.y - math.abs(cone_max.x - pos.x), cone_max.y - math.abs(cone_max.z - pos.z))
+        else
+            minetest.chat_send_all("assert failed")
+        end
+
+        return true
+    end
+    
+    return false
+end
+
+function is_underground(pos)
+    -- checks if given pos is underground
+    
+    for i, v in pairs(maximums) do
+        if ((cache[pos.x] and cache[pos.x][pos.z] and pos.y < cache[pos.x][pos.z]) or is_inside_the_cone(pos,v)) then
+            return true
+        end
+    end
+
+    return false
 end
 
 minetest.register_on_mapgen_init(function(mapgen_params)
     math.randomseed(mapgen_params.seed) -- produce the same world for the same seed
 
-    xWalk = generateRandomWalkVector(MIN_X, MAX_X, false);
-    zWalk = generateRandomWalkVector(MIN_X, MAX_X, false);
-    xzWalk1 = generateRandomWalkVector(MIN_X, MAX_X, false);
-    xzWalk2 = generateRandomWalkVector(MIN_Z, MAX_Z, false);
-    xzWalk3 = generateRandomWalkVector(MIN_Z, MAX_Z, true);
-    xzWalk4 = generateRandomWalkVector(MIN_Z, MAX_Z, true);
-    xzWalk5 = generateRandomWalkVector(MIN_Z, MAX_Z, true);
+    maximums = generate_maximums()
+
+    minetest.chat_send_all("done generating")
 end)
 
 
@@ -79,36 +85,32 @@ minetest.register_on_generated(function(minp, maxp, seed)
     local csize = vector.add(vector.subtract(maxp, minp), 1)
     local write = false
 
+-- debug
+    local t1 = os.clock()
+    local geninfo = "[mg] generates..."
+-- debug
+
+
     local index2d = 0
     for z = minp.z, maxp.z do
     for y = minp.y, maxp.y do
     for x = minp.x, maxp.x do
-        if xzWalk1[x] then
-            index2d = (z - minp.z) * csize.x + (x - minp.x) + 1   
-            local ivm = a:index(x, y, z)
+        index2d = (z - minp.z) * csize.x + (x - minp.x) + 1   
+        local ivm = a:index(x, y, z)
 
-            if y < (xWalk[x] + zWalk[z]
-                    + xzWalk1[x + z] + xzWalk2[z - x]
-                    + xzWalk3[math.floor((x * z * 0.1 * xWalk[math.floor(x / 100)]
-                        + x * x * 0.01 * xWalk[math.floor(z / 100)]
-                        + z * z * 0.001 * xWalk[math.floor(x / 100)] + z * 2 + x * 3) / 100)]
-                    + xzWalk4[math.floor((x * z * 0.001 * zWalk[math.floor(z / 100)]
-                        + x * x * 0.1 * zWalk[math.floor(x / 100)]
-                        + z * z * 0.01 * xWalk[math.floor(z / 100)] - z * 2 - x * 3) / 100)]
-                    + xzWalk5[math.floor((x * z * 0.0001 * xWalk[math.floor(z / 100)]
-                        + x * x * 0.01 * xWalk[math.floor(x / 100)]
-                        + z * z * 0.1 * zWalk[math.floor(x /100)] - z - x) / 100)]
-                    ) / 4 then
-                data[ivm] = c_stone
-                write = true
-            elseif y < 1 then
-                data[ivm] = c_water
-                write = true
-            end
-         end
+        if is_underground({x=x, y= y, z=z}) then
+            data[ivm] = c_stone
+            write = true
+        elseif y < 1 then
+            data[ivm] = c_water
+            write = true
+        end
      end
      end
      end
+
+    local t2 = os.clock()
+    local calcdelay = string.format("%.2fs", t2 - t1)
 
     if write then
         vm:set_data(data)
@@ -117,5 +119,12 @@ minetest.register_on_generated(function(minp, maxp, seed)
         vm:update_liquids()
         vm:write_to_map()
     end
+
+    -- debug
+    local t3 = os.clock()
+    local geninfo = "[mg] done after ca.: "..calcdelay.." + "..string.format("%.2fs", t3 - t2).." = "..string.format("%.2fs", t3 - t1)
+    minetest.chat_send_all(geninfo)
+    print(geninfo)
+    -- debug
 
 end)
